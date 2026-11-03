@@ -78,7 +78,7 @@ def main() -> None:
 
         catalog = request(2, "tools/list", {})
         names = {entry["name"] for entry in catalog["tools"]}
-        expected = {"health", "list_displays", "list_windows", "observe_ui", "screenshot", "act", "act_element", "resolve_element"}
+        expected = {"health", "list_displays", "list_windows", "observe_ui", "screenshot", "act", "act_element", "resolve_element", "check_ui_condition"}
         assert names == expected, f"tool list differs: {names}"
 
         health = request(3, "tools/call", {"name": "health", "arguments": {}})
@@ -124,6 +124,15 @@ def main() -> None:
         )
         assert denied_resolve.get("isError") is True, denied_resolve
         assert "permission" in denied_resolve["content"][0]["text"].lower(), denied_resolve
+        denied_condition = request(
+            8,
+            "tools/call",
+            {"name": "check_ui_condition", "arguments": {
+                "name": "Save", "role": "button", "expected_present": True,
+            }},
+        )
+        assert denied_condition.get("isError") is True, denied_condition
+        assert "permission" in denied_condition["content"][0]["text"].lower(), denied_condition
         print("MCP handshake, tool catalog, health, and denial gates: PASS")
     finally:
         proc.terminate()
