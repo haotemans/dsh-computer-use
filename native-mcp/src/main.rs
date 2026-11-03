@@ -56,6 +56,16 @@ struct ResolveElementArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+struct CheckUiConditionArgs {
+    /// Exact native accessible name of the control to check.
+    name: String,
+    /// Optional exact role (button, textbox, checkbox, etc).
+    role: Option<String>,
+    /// Whether the control is expected to be present.
+    expected_present: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ActElementArgs {
     /// Token from the most recent observe_ui response.
     element_token: String,
@@ -358,6 +368,45 @@ impl NativeCua {
             },
             Ok(Err(e)) => tool_error(e),
             Err(e) => tool_error(e.to_string()),
+        }
+    }
+
+    #[tool(description = "Windows only: re-observe a named accessible control after an action. Reports satisfied, unsatisfied or inconclusive according to current foreground UIA coverage. Read-only and not proof of broader task success")]
+    async fn check_ui_condition(&self, Parameters(args): Parameters<CheckUiConditionArgs>) -> CallToolResult {
+        if !allow_capture() { return tool_error("ACCESS_DENIED: capture permission required"); }
+        if args.name.is_empty() { return tool_error("INVALID_ARGUMENT: name is required"); }
+        #[cfg(not(windows))]
+        { let _ = args; return tool_error("UNAVAILABLE: Windows UI Automation required"); }
+        #[cfg(windows)]
+        {
+            let _guard = self.desktop_lock.lock().await;
+            let result = tokio::task::spawn_blocking(move ||
+                windows_uia::check_condition(&args.name, args.role.as_deref())
+                    .map(|condition| {
+                        let verdict = if condition.matched > 0 {
+                            if args.expected_present { "satisfied" } else { "unsatisfied" }
+                        } else if condition.truncated || condition.scanned == 0 {
+                            "inconclusive"
+                        } else if args.expected_present {
+                            "unsatisfied"
+                        } else {
+                            "satisfied"
+                        };
+                        json!({
+                            "verdict": verdict,
+                            "matches": condition.matched,
+                            "scanned_accessible_controls": condition.scanned,
+                            "truncated": condition.truncated,
+                            "scope": "current_foreground_window",
+                            "note": "UIA provider coverage is partial; this is a local UI condition, not end-to-end task success"
+                        }).to_string()
+                    })
+            ).await;
+            match result {
+                Ok(Ok(output)) => CallToolResult::success(vec![ContentBlock::text(output)]),
+                Ok(Err(error)) => tool_error(error),
+                Err(error) => tool_error(format!("UNAVAILABLE: UI condition check: {error}")),
+            }
         }
     }
 
