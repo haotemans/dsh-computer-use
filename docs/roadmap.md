@@ -32,3 +32,11 @@
 ## Benchmarks
 
 Test on real machines, not in the current build environment: latency to list UI elements, screenshot 1080p/window/region, encode JPEG, click+type, batch+verify; P50/P95/P99 CPU and RSS, correct target rate under DPI/multi-monitor/window movement.
+
+## V0.1.2 — input safety preflight
+
+- [x] Side-effect-free validation of entire action batch before input injection
+- [x] Global physical coordinate validation across attached displays, including negative origins
+- [x] Reject malformed/duplicate hotkey modifiers and unsupported keys
+- [x] Unit tests for monitor bounds, overflow, invalid late steps and input limits
+- [ ] Verify new Rust tests in Windows CI; real desktop targeting and DSH integration tests still pending
