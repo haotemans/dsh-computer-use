@@ -32,3 +32,7 @@ Measure `get_displays`, `list_windows`, `capture_region`, `jpeg_encode`, `mcp_se
 ## Model-facing UI description (ADR-0002)
 
 The Rust MCP server attaches short task guidance to its server instructions, which the DSH MCP bridge adds to model context. `observe_ui` uses a bounded, labelled `UIv1` snapshot with compact rendering by default. The current data source is **window inventory only**; no accessibility control tree is falsely implied. See `docs/deepseek-ui-contract.md`.
+
+## Input preflight boundary (V0.1.2)
+
+`native-mcp/src/input_validation.rs` is a side-effect-free, unit-tested validator. It converts a batch of deserialized actions into typed, prepared Enigo actions before creating an input engine. It rejects invalid later steps before earlier steps can produce side effects. Pointer coordinates are checked against current monitor rectangles using overflow-safe 64-bit arithmetic; the current desktop lock covers validation and execution within one Rust process. An OS/device error **after** preflight can still produce partial execution, and external window focus changes are not prevented. This is not a focus guard, per-app permission system or an atomic transaction.
