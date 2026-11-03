@@ -41,3 +41,7 @@ jobs:
         run: cargo check --all-targets
       - name: Run Rust tests
         run: cargo test
+      - name: Build Rust MCP executable
+        run: cargo build
+      - name: MCP stdio handshake and safety smoke test
+        run: python tests/smoke_mcp.py target/debug/dsh-native-cua.exe
