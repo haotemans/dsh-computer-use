@@ -18,5 +18,5 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 xcap = "0.9.8"
 
 [target.'cfg(windows)'.dependencies]
-uiautomation = { version = "0.25.1", default-features = false }
-windows = { version = "0.62.2", features = ["Win32_UI_WindowsAndMessaging"] }
+uiautomation = { version = "0.25.1", features = ["input"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
