@@ -111,7 +111,16 @@ fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
         (None, None, None, None) => (0, 0, m.capture_image().map_err(|e| e.to_string())?),
         (Some(x), Some(y), Some(w), Some(h)) if w > 0 && h > 0 => {
             if w > 4096 || h > 4096 { return Err("region must be <= 4096x4096".into()); }
-            (x, y, m.capture_region(x, y, w, h).map_err(|e| e.to_string())?)
+            let x_local = u32::try_from(x).map_err(|_| "screenshot local x must be nonnegative")?;
+            let y_local = u32::try_from(y).map_err(|_| "screenshot local y must be nonnegative")?;
+            let end_x = x_local.checked_add(w).ok_or("screenshot x + width overflow")?;
+            let end_y = y_local.checked_add(h).ok_or("screenshot y + height overflow")?;
+            if end_x > m.width().map_err(|e| e.to_string())?
+                || end_y > m.height().map_err(|e| e.to_string())?
+            {
+                return Err("screenshot rectangle exceeds monitor bounds".into());
+            }
+            (x, y, m.capture_region(x_local, y_local, w, h).map_err(|e| e.to_string())?)
         }
         _ => return Err("provide x, y, width, height together, or omit all four".into()),
     };
@@ -124,7 +133,10 @@ fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
     let meta = json!({
         "monitor_origin": [origin_x, origin_y],
         "region_local_origin": [local_x, local_y],
-        "region_global_origin": [origin_x + local_x, origin_y + local_y],
+        "region_global_origin": [
+            origin_x.checked_add(local_x).ok_or("global x coordinate overflow")?,
+            origin_y.checked_add(local_y).ok_or("global y coordinate overflow")?
+        ],
         "width": rgb.width(), "height": rgb.height(),
         "format": "jpeg"
     });
