@@ -50,3 +50,9 @@ Parameters:
 ```
 
 Mouse coordinates are **global** (unlike screenshot-region x/y). The step limit is 32. If step N fails, steps before N might already have taken effect. No rollback is possible. A screenshot is a state observation, not verification of successful task completion.
+
+### Input preflight (V0.1.2)
+
+Before any input is emitted, `act` validates the **entire** batch. Each click/move must be inside a currently attached monitor, using **global physical pixel coordinates** (including negative coordinates on secondary displays). Invalid buttons, unsupported keys, malformed hotkeys, text over 16,384 UTF-8 bytes, oversized scrolls, and batch lengths outside 1..32 reject the request without sending any input. Key-only/text-only batches do not require display enumeration. A hotkey contains 1..4 distinct modifiers followed by one non-modifier key.
+
+Preflight is not a transaction and does **not** make an executing batch atomic: OS input injection can still fail mid-batch, and the target window can change between validation and delivery. Do not retry a partially executed batch without observing the desktop state. Coordinate validation prevents off-display clicks, not clicks in the wrong application. Per-app consent, foreground window checks, and semantic postconditions remain future work.
