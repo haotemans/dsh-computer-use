@@ -242,7 +242,15 @@ fn run_actions(actions: Vec<PreparedAction>) -> Result<usize, String> {
 impl NativeCua {
     #[tool(description = "Check Rust desktop MCP health and opt-in permission flags")]
     fn health(&self) -> String {
-        json!({"ready": true, "capture_enabled": allow_capture(), "input_enabled": allow_input()}).to_string()
+        json!({
+            "ready": true,
+            "capture_enabled": allow_capture(),
+            "input_enabled": allow_input(),
+            "platform": std::env::consts::OS,
+            "native_accessibility": if cfg!(windows) { "windows_uia_experimental" } else { "not_implemented" },
+            "element_snapshot_ttl_seconds": 10,
+            "screenshot_max_dimension_supported": true
+        }).to_string()
     }
 
     #[tool(description = "List attached displays with global origins for accurate coordinate mapping")]
