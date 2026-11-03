@@ -1,6 +1,6 @@
 # DeepSeek Harness Computer Use: TypeScript adapter + Rust MCP
 
-> Status: **V0.1 development scaffold**. Not production-ready. The Rust code has **not** been compiled or integration-tested in the authoring environment (no Rust toolchain or package network). No releases or binaries are included.
+> Status: **V0.1 development scaffold**. Not production-ready. The new Windows UIA version has not been integration-tested on an interactive desktop in the authoring environment (no local Rust toolchain or GUI). GitHub Actions verifies compilation and smoke tests. No official release or signed installer is included; successful CI runs upload an unsigned Windows debug executable artifact.
 
 ## Architecture and separation of concerns
 
@@ -26,10 +26,13 @@ The TS plugin is a tiny connection layer; it deliberately reuses DSH's existing 
 | `observe_ui` | DeepSeek-facing `UIv1` compact window inventory (or JSON); bounded snapshot IDs, explicit `windows_only` coverage and pixel coordinates |
 | `screenshot` | Entire monitor / monitor-local region, JPEG image and coordinate metadata |
 | `act` | Batch up to 32 mouse/keyboard actions with optional screenshot-after |
+| `resolve_element` | Windows UIA: uniquely resolve a real control by exact accessible name and role within a fresh snapshot |
+| `act_element` | Windows UIA: guarded click/focus on a fresh element token; revalidates foreground, identity and bounds |
+| `check_ui_condition` | Windows UIA: check control presence/absence and return satisfied, unsatisfied or inconclusive |
 
 Input actions: `move`, `click`, `text`, `key`, `hotkey`, `scroll`. All actions are ordered and fail fast; already delivered input is **not** rolled back. A successful delivery is not proof of the intended UI result.
 
-**Not implemented yet:** Native accessibility control enumeration in `observe_ui`, Windows UI Automation, Linux AT-SPI, element tokens, window focus safety guards, per-app grants, image diffing, user-attended permission UI, automatic semantic verification, browser CDP, release packaging, installer, CI and measured performance. Do not assume they exist.
+**Windows experimental V0.2:** `observe_ui` attempts a bounded UI Automation scan of the foreground window; `resolve_element` and `act_element` support exact-name lookup and guarded click/focus with expiring snapshot tokens. `act` optionally accepts a foreground snapshot guard. Screenshots support quality/resize options and report pixel-to-global coordinate scale. UIA failure returns the explicit window-only fallback; the platform has not been end-to-end validated on a real interactive desktop. CI and the unsigned Windows debug artifact are provided for iterative testing. **Not implemented:** Linux AT-SPI control enumeration, per-app consent UI, robust foreground policy for unguarded raw actions, invoke/value patterns, automatic semantic verification, image diffing, browser CDP, signed installer and measured performance.
 
 ## Build the Rust MCP server
 
@@ -82,3 +85,15 @@ Further design: `docs/architecture.md`, `docs/deepseek-ui-contract.md`, `docs/mc
 - Rust RMCP SDK: https://github.com/modelcontextprotocol/rust-sdk
 - xcap: https://docs.rs/xcap/
 - enigo: https://docs.rs/enigo/
+
+## Input validation (V0.1.2 source)
+
+`act` now performs **whole-batch preflight** before sending any input. Click/move coordinates must fall within a currently connected display in global physical pixels, including negative origins. The validator rejects invalid buttons, hotkeys, keys, text length, scroll amount and oversized batches, so an invalid late action does not execute earlier actions. Keyboard-only requests do not require a display lookup.
+
+This does **not** guarantee transactionality once execution starts: OS injection errors, application focus changes or UI transitions can still result in partial execution. It also does **not** enforce a foreground-window policy, app allowlist or per-application consent. Re-observe before retries; see `docs/mcp-contract.md`.
+
+## Windows UIA experimental V0.2
+
+The Windows backend now attempts a **bounded foreground-window UI Automation observation** in `observe_ui`. When successful, the response includes actual controls and snapshot-scoped `element_token` values. `act_element` supports guarded `click` and `focus`; each operation checks token age, foreground HWND, process, runtime identity and live bounds. Password fields are not actionable. On UIA failure, the server falls back to the explicit `windows_only` observation. Capture/input remain opt-in.
+
+See [Windows interactive debugging instructions](docs/windows-debugging.md). This is still an **experimental Windows implementation**, not a production-ready unattended automation system. There is no signed installer, per-app consent UI, CDP backend, automatic postcondition verification or Linux AT-SPI element backend yet. CI compilation and real-desktop integration are distinct checks; a successful compile alone does not prove real desktop operation.

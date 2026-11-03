@@ -45,3 +45,10 @@ jobs:
         run: cargo build
       - name: MCP stdio handshake and safety smoke test
         run: python tests/smoke_mcp.py target/debug/dsh-native-cua.exe
+      - name: Upload unsigned Windows debug binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-native-cua-windows-debug
+          path: native-mcp/target/debug/dsh-native-cua.exe
+          if-no-files-found: error
+          retention-days: 7

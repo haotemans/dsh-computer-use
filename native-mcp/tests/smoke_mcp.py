@@ -78,17 +78,18 @@ def main() -> None:
 
         catalog = request(2, "tools/list", {})
         names = {entry["name"] for entry in catalog["tools"]}
-        expected = {"health", "list_displays", "list_windows", "observe_ui", "screenshot", "act"}
+        expected = {"health", "list_displays", "list_windows", "observe_ui", "screenshot", "act", "act_element", "resolve_element", "check_ui_condition"}
         assert names == expected, f"tool list differs: {names}"
 
         health = request(3, "tools/call", {"name": "health", "arguments": {}})
         text = health["content"][0]["text"]
         flags = json.loads(text)
-        assert flags == {
-            "ready": True,
-            "capture_enabled": False,
-            "input_enabled": False,
-        }, flags
+        assert flags["ready"] is True, flags
+        assert flags["capture_enabled"] is False, flags
+        assert flags["input_enabled"] is False, flags
+        assert flags["platform"] in {"windows", "linux", "macos"}, flags
+        assert flags["element_snapshot_ttl_seconds"] == 10, flags
+        assert flags["native_accessibility"] in {"windows_uia_experimental", "not_implemented"}, flags
 
         denied_input = request(
             4,
@@ -105,6 +106,33 @@ def main() -> None:
         )
         assert denied_capture.get("isError") is True, denied_capture
         assert "disabled" in denied_capture["content"][0]["text"].lower(), denied_capture
+        denied_element = request(
+            6,
+            "tools/call",
+            {"name": "act_element", "arguments": {
+                "snapshot_id": "s1", "element_token": "es1:0", "action": "click",
+            }},
+        )
+        assert denied_element.get("isError") is True, denied_element
+        assert "permission" in denied_element["content"][0]["text"].lower(), denied_element
+        denied_resolve = request(
+            7,
+            "tools/call",
+            {"name": "resolve_element", "arguments": {
+                "snapshot_id": "s1", "name": "Save", "role": "button",
+            }},
+        )
+        assert denied_resolve.get("isError") is True, denied_resolve
+        assert "permission" in denied_resolve["content"][0]["text"].lower(), denied_resolve
+        denied_condition = request(
+            8,
+            "tools/call",
+            {"name": "check_ui_condition", "arguments": {
+                "name": "Save", "role": "button", "expected_present": True,
+            }},
+        )
+        assert denied_condition.get("isError") is True, denied_condition
+        assert "permission" in denied_condition["content"][0]["text"].lower(), denied_condition
         print("MCP handshake, tool catalog, health, and denial gates: PASS")
     finally:
         proc.terminate()
