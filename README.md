@@ -1,6 +1,6 @@
 # DeepSeek Harness Computer Use: TypeScript adapter + Rust MCP
 
-> Status: **V0.1 development scaffold**. Not production-ready. The Rust code has **not** been compiled or integration-tested in the authoring environment (no Rust toolchain or package network). No releases or binaries are included.
+> Status: **V0.1 development scaffold**. Not production-ready. The new Windows UIA version has not been integration-tested on an interactive desktop in the authoring environment (no local Rust toolchain or GUI). GitHub Actions verifies compilation and smoke tests. No official release or signed installer is included; successful CI runs upload an unsigned Windows debug executable artifact.
 
 ## Architecture and separation of concerns
 
@@ -29,7 +29,7 @@ The TS plugin is a tiny connection layer; it deliberately reuses DSH's existing 
 
 Input actions: `move`, `click`, `text`, `key`, `hotkey`, `scroll`. All actions are ordered and fail fast; already delivered input is **not** rolled back. A successful delivery is not proof of the intended UI result.
 
-**Not implemented yet:** Native accessibility control enumeration in `observe_ui`, Windows UI Automation, Linux AT-SPI, element tokens, window focus safety guards, per-app grants, image diffing, user-attended permission UI, automatic semantic verification, browser CDP, release packaging, installer, CI and measured performance. Do not assume they exist.
+**Windows experimental V0.2:** `observe_ui` attempts a bounded UI Automation scan of the foreground window; `resolve_element` and `act_element` support exact-name lookup and guarded click/focus with expiring snapshot tokens. `act` optionally accepts a foreground snapshot guard. Screenshots support quality/resize options and report pixel-to-global coordinate scale. UIA failure returns the explicit window-only fallback; the platform has not been end-to-end validated on a real interactive desktop. CI and the unsigned Windows debug artifact are provided for iterative testing. **Not implemented:** Linux AT-SPI control enumeration, per-app consent UI, robust foreground policy for unguarded raw actions, invoke/value patterns, automatic semantic verification, image diffing, browser CDP, signed installer and measured performance.
 
 ## Build the Rust MCP server
 
