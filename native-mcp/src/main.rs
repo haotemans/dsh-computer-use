@@ -15,7 +15,7 @@ use enigo::{
     Direction::{Click, Press, Release},
     Enigo, Keyboard, Mouse, Settings,
 };
-use image::codecs::jpeg::JpegEncoder;
+use image::{codecs::jpeg::JpegEncoder, imageops::FilterType};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, ContentBlock},
@@ -79,6 +79,10 @@ struct ScreenshotArgs {
     y: Option<i32>,
     width: Option<u32>,
     height: Option<u32>,
+    /// Optional max encoded dimension (512..4096), with scale metadata.
+    max_dimension: Option<u32>,
+    /// JPEG quality (40..95, default 78).
+    quality: Option<u8>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -115,6 +119,13 @@ fn choose_monitor(index: Option<usize>) -> Result<Monitor, String> {
 }
 
 fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
+    let quality = args.quality.unwrap_or(78);
+    if !(40..=95).contains(&quality) { return Err("quality must be 40..95".into()); }
+    if let Some(limit) = args.max_dimension {
+        if !(512..=4096).contains(&limit) {
+            return Err("max_dimension must be 512..4096".into());
+        }
+    }
     let m = choose_monitor(args.monitor_index)?;
     let (origin_x, origin_y) = (m.x().map_err(|e| e.to_string())?, m.y().map_err(|e| e.to_string())?);
     let (local_x, local_y, img) = match (args.x, args.y, args.width, args.height) {
@@ -135,9 +146,16 @@ fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
         _ => return Err("provide x, y, width, height together, or omit all four".into()),
     };
     // JPEG is significantly smaller than a PNG screenshot for common desktops.
-    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+    let original = image::DynamicImage::ImageRgba8(img);
+    let (source_width, source_height) = (original.width(), original.height());
+    let resized = match args.max_dimension {
+        Some(limit) if source_width.max(source_height) > limit =>
+            original.resize(limit, limit, FilterType::Triangle),
+        _ => original,
+    };
+    let rgb = resized.to_rgb8();
     let mut bytes = Vec::new();
-    JpegEncoder::new_with_quality(&mut bytes, 78)
+    JpegEncoder::new_with_quality(&mut bytes, quality)
         .encode(rgb.as_raw(), rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
         .map_err(|e| e.to_string())?;
     let meta = json!({
@@ -148,6 +166,12 @@ fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
             origin_y.checked_add(local_y).ok_or("global y coordinate overflow")?
         ],
         "width": rgb.width(), "height": rgb.height(),
+        "source_width": source_width, "source_height": source_height,
+        "pixel_to_global_scale": [
+            f64::from(source_width) / f64::from(rgb.width()),
+            f64::from(source_height) / f64::from(rgb.height())
+        ],
+        "quality": quality,
         "format": "jpeg"
     });
     Ok(CallToolResult::success(vec![
@@ -376,7 +400,7 @@ impl NativeCua {
         }
     }
 
-    #[tool(description = "Capture screen evidence as JPEG when observe_ui cannot show a target. Rectangle x/y are MONITOR-LOCAL; returned region_global_origin maps image pixels to GLOBAL coordinates. Requires capture permission")]
+    #[tool(description = "Capture JPEG screen evidence. Region x/y are MONITOR-LOCAL. Optional quality and max_dimension reduce bandwidth; if resized, use pixel_to_global_scale and region_global_origin to map image pixels to global physical coordinates. Requires capture permission")]
     async fn screenshot(&self, Parameters(args): Parameters<ScreenshotArgs>) -> CallToolResult {
         if !allow_capture() { return tool_error("Capture disabled. Set allowCapture=true in the TS provider configuration."); }
         let _guard = self.desktop_lock.lock().await;
@@ -430,6 +454,7 @@ impl NativeCua {
                 if screenshot_after {
                     let capture_result = tokio::task::spawn_blocking(|| capture(ScreenshotArgs {
                         monitor_index: None, x: None, y: None, width: None, height: None,
+                        max_dimension: None, quality: None,
                     })).await;
                     return match capture_result {
                         Ok(Ok(mut result)) => {
