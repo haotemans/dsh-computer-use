@@ -30,6 +30,11 @@ fn hwnd() -> Result<isize, String> {
     Ok(handle.0 as isize)
 }
 
+pub fn verify_foreground(expected: isize) -> Result<(), String> {
+    if hwnd()? != expected { Err("STALE: foreground window changed; observe again".into()) }
+    else { Ok(()) }
+}
+
 fn automation_window(automation: &UIAutomation, window: isize) -> Result<UIElement, String> {
     automation.element_from_handle(Handle::from(window)).map_err(|e| format!("UNAVAILABLE: window UI Automation: {e}"))
 }
