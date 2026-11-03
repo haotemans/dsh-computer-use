@@ -165,3 +165,26 @@ pub fn act_on_element(expected_window: isize, target: &Target, action: &str) -> 
         _ => Err("INVALID_ARGUMENT: supported actions are focus and click".into()),
     }
 }
+
+#[derive(Debug)]
+pub struct ConditionResult {
+    pub matched: usize,
+    pub scanned: usize,
+    pub truncated: bool,
+}
+
+/// Live UIA name/role query; an absent result is inconclusive when the
+/// provider tree is truncated or empty. Never interpret absence as task success
+/// without adequate observation coverage.
+pub fn check_condition(name: &str, expected_role: Option<&str>) -> Result<ConditionResult, String> {
+    let foreground = hwnd()?;
+    let automation = UIAutomation::new().map_err(|e| format!("UNAVAILABLE: UI Automation: {e}"))?;
+    let root = automation_window(&automation, foreground)?;
+    let walker = automation.get_control_view_walker().map_err(|e| e.to_string())?;
+    let (nodes, truncated) = crawl(&walker, &root, 120);
+    let scanned = nodes.len();
+    let matched = nodes.iter().filter(|(target, _)|
+        target.name == name && expected_role.is_none_or(|role| role == target.role)
+    ).count();
+    Ok(ConditionResult { matched, scanned, truncated })
+}
