@@ -1,0 +1,31 @@
+{
+  "name": "dsh-computer-use-rust-mcp",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-mcp-client": "0.2.2-alpha.2",
+    "@deepseek-ai/schemastery": "0.2.2-alpha.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-computer-use": "*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "0.2.2-alpha.2",
+    "@deepseek-ai/dsh-computer-use": "0.2.2-alpha.2",
+    "typescript": "^5.8.3"
+  }
+}
