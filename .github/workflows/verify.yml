@@ -1,0 +1,43 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install plugin dependencies
+        working-directory: plugin
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and compile
+        working-directory: plugin
+        run: npm run build
+
+  rust-windows:
+    name: Rust check and tests (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: native-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native-mcp
+      - name: Check all Rust targets
+        run: cargo check --all-targets
+      - name: Run Rust tests
+        run: cargo test
