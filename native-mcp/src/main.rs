@@ -2,14 +2,16 @@
 //! No stdout logging: stdout is reserved for MCP JSON-RPC frames.
 use std::{sync::{Arc, atomic::{AtomicU64, Ordering}}};
 
+mod input_validation;
 mod ui_description;
+use input_validation::{Action, DisplayRect, PreparedAction, needs_pointer, prepare_actions};
 use ui_description::{Bounds, UiSnapshot, UiWindow, render_compact, render_json};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use enigo::{
     Axis, Button, Coordinate,
     Direction::{Click, Press, Release},
-    Enigo, Key, Keyboard, Mouse, Settings,
+    Enigo, Keyboard, Mouse, Settings,
 };
 use image::codecs::jpeg::JpegEncoder;
 use rmcp::{
@@ -55,23 +57,6 @@ struct ScreenshotArgs {
     y: Option<i32>,
     width: Option<u32>,
     height: Option<u32>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum Action {
-    /// Move cursor using global desktop coordinates.
-    Move { x: i32, y: i32 },
-    /// Click a point; button: left, right, or middle.
-    Click { x: i32, y: i32, button: Option<String> },
-    /// Enter text into the focused control (never stored in logs).
-    Text { text: String },
-    /// Press key: enter, tab, escape, backspace, delete, arrows, or a character.
-    Key { key: String },
-    /// Press modifiers and the final key together (e.g. ["ctrl", "a"]).
-    Hotkey { keys: Vec<String> },
-    /// Vertical scroll (positive up, negative down).
-    Scroll { amount: i32 },
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -146,79 +131,52 @@ fn capture(args: ScreenshotArgs) -> Result<CallToolResult, String> {
     ]))
 }
 
-fn parse_key(name: &str) -> Result<Key, String> {
-    let key = match name.to_ascii_lowercase().as_str() {
-        "ctrl" | "control" => Key::Control,
-        "alt" => Key::Alt,
-        "shift" => Key::Shift,
-        "meta" | "super" | "win" | "command" => Key::Meta,
-        "enter" | "return" => Key::Return,
-        "tab" => Key::Tab,
-        "escape" | "esc" => Key::Escape,
-        "backspace" => Key::Backspace,
-        "delete" => Key::Delete,
-        "space" => Key::Space,
-        "up" => Key::UpArrow,
-        "down" => Key::DownArrow,
-        "left" => Key::LeftArrow,
-        "right" => Key::RightArrow,
-        other => {
-            let mut chars = other.chars();
-            match (chars.next(), chars.next()) {
-                (Some(c), None) => Key::Unicode(c),
-                _ => return Err(format!("unsupported key: {name}")),
-            }
-        }
-    };
-    Ok(key)
+fn attached_displays() -> Result<Vec<DisplayRect>, String> {
+    let monitors = Monitor::all().map_err(|e| format!("cannot enumerate displays: {e}"))?;
+    if monitors.is_empty() { return Err("no attached displays available".into()); }
+    monitors.into_iter().map(|m| {
+        Ok(DisplayRect {
+            x: m.x().map_err(|e| e.to_string())?,
+            y: m.y().map_err(|e| e.to_string())?,
+            width: m.width().map_err(|e| e.to_string())?,
+            height: m.height().map_err(|e| e.to_string())?,
+        })
+    }).collect()
 }
 
-fn run_actions(actions: Vec<Action>) -> Result<usize, String> {
+fn run_actions(actions: Vec<PreparedAction>) -> Result<usize, String> {
     let mut engine = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-    for (i, action) in actions.iter().enumerate() {
+    let count = actions.len();
+    for (i, action) in actions.into_iter().enumerate() {
         let outcome: Result<(), String> = match action {
-            Action::Move { x, y } => engine.move_mouse(*x, *y, Coordinate::Abs).map_err(|e| e.to_string()),
-            Action::Click { x, y, button } => {
-                let b = match button.as_deref().unwrap_or("left") {
-                    "left" => Button::Left, "right" => Button::Right,
-                    "middle" => Button::Middle,
-                    other => return Err(format!("step {i}: unknown mouse button: {other}")),
-                };
-                engine.move_mouse(*x, *y, Coordinate::Abs).map_err(|e| e.to_string())?;
-                engine.button(b, Click).map_err(|e| e.to_string())
+            PreparedAction::Move { x, y } =>
+                engine.move_mouse(x, y, Coordinate::Abs).map_err(|e| e.to_string()),
+            PreparedAction::Click { x, y, button } => {
+                engine.move_mouse(x, y, Coordinate::Abs).map_err(|e| e.to_string())?;
+                engine.button(button, Click).map_err(|e| e.to_string())
             }
-            Action::Text { text } => {
-                if text.len() > 16_384 { return Err(format!("step {i}: text is too long")); }
-                engine.text(text).map_err(|e| e.to_string())
-            }
-            Action::Key { key } => {
-                let parsed = parse_key(key)?;
-                engine.key(parsed, Click).map_err(|e| e.to_string())
-            }
-            Action::Hotkey { keys } => {
-                if keys.is_empty() || keys.len() > 5 { return Err(format!("step {i}: invalid hotkey length")); }
-                let parsed = keys.iter().map(|k| parse_key(k)).collect::<Result<Vec<_>, _>>()?;
+            PreparedAction::Text { text } => engine.text(&text).map_err(|e| e.to_string()),
+            PreparedAction::Key { key } => engine.key(key, Click).map_err(|e| e.to_string()),
+            PreparedAction::Hotkey { keys } => {
                 let mut held = Vec::new();
-                for k in &parsed[..parsed.len()-1] {
-                    if let Err(e) = engine.key(*k, Press) {
-                        for h in held.iter().rev() { let _ = engine.key(*h, Release); }
+                for key in &keys[..keys.len() - 1] {
+                    if let Err(e) = engine.key(*key, Press) {
+                        for held_key in held.iter().rev() { let _ = engine.key(*held_key, Release); }
                         return Err(format!("step {i}: could not press modifier: {e}"));
                     }
-                    held.push(*k);
+                    held.push(*key);
                 }
-                let result = engine.key(*parsed.last().unwrap(), Click).map_err(|e| e.to_string());
-                // Always release modifiers, including when the main key action fails.
-                for k in held.iter().rev() { let _ = engine.key(*k, Release); }
+                let result = engine.key(*keys.last().expect("preflight ensures a final key"), Click)
+                    .map_err(|e| e.to_string());
+                for held_key in held.iter().rev() { let _ = engine.key(*held_key, Release); }
                 result
             }
-            Action::Scroll { amount } => {
-                if amount.unsigned_abs() > 30 { return Err(format!("step {i}: scroll limit is 30")); }
-                engine.scroll(*amount, Axis::Vertical).map_err(|e| e.to_string())
-            }
+            PreparedAction::Scroll { amount } =>
+                engine.scroll(amount, Axis::Vertical).map_err(|e| e.to_string()),
         };
         outcome.map_err(|e| format!("step {i} failed: {e}"))?;
     }
-    Ok(actions.len())
+    Ok(count)
 }
 
 #[tool_router]
@@ -323,7 +281,7 @@ impl NativeCua {
         }
     }
 
-    #[tool(description = "Execute up to 32 ordered desktop input actions. Click/move use GLOBAL PHYSICAL coordinates; verify resulting state afterward using observe_ui or screenshot. Delivered input is not task success. Requires input permission")]
+    #[tool(description = "Execute up to 32 ordered desktop input actions. Entire batch is preflight-validated before any input; click/move must lie inside an attached display in GLOBAL PHYSICAL coordinates. OS failures may still cause partial execution. Verify resulting state using observe_ui or screenshot. Requires input permission")]
     async fn act(&self, Parameters(args): Parameters<ActionsArgs>) -> CallToolResult {
         if !allow_input() { return tool_error("Input disabled. Set allowInput=true in the TS provider configuration."); }
         if args.actions.is_empty() || args.actions.len() > 32 {
@@ -334,7 +292,14 @@ impl NativeCua {
         }
         let _guard = self.desktop_lock.lock().await;
         let screenshot_after = args.screenshot_after;
-        let outcome = tokio::task::spawn_blocking(move || run_actions(args.actions)).await;
+        // Preflight the entire batch before constructing Enigo or delivering input.
+        // Pointer actions must use current, global physical display coordinates.
+        let outcome = tokio::task::spawn_blocking(move || {
+            let displays = if needs_pointer(&args.actions) { attached_displays()? } else { Vec::new() };
+            let prepared = prepare_actions(args.actions, &displays)
+                .map_err(|error| format!("preflight rejected batch: {error}"))?;
+            run_actions(prepared)
+        }).await;
         match outcome {
             Ok(Ok(count)) => {
                 if screenshot_after {
