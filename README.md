@@ -82,3 +82,9 @@ Further design: `docs/architecture.md`, `docs/deepseek-ui-contract.md`, `docs/mc
 - Rust RMCP SDK: https://github.com/modelcontextprotocol/rust-sdk
 - xcap: https://docs.rs/xcap/
 - enigo: https://docs.rs/enigo/
+
+## Input validation (V0.1.2 source)
+
+`act` now performs **whole-batch preflight** before sending any input. Click/move coordinates must fall within a currently connected display in global physical pixels, including negative origins. The validator rejects invalid buttons, hotkeys, keys, text length, scroll amount and oversized batches, so an invalid late action does not execute earlier actions. Keyboard-only requests do not require a display lookup.
+
+This does **not** guarantee transactionality once execution starts: OS injection errors, application focus changes or UI transitions can still result in partial execution. It also does **not** enforce a foreground-window policy, app allowlist or per-application consent. Re-observe before retries; see `docs/mcp-contract.md`.
