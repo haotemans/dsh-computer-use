@@ -89,3 +89,15 @@ values, not invented. A new observation invalidates prior tokens.
 
 Report the Windows version, DSH version, command output, tool arguments,
 actual tool responses (with secrets removed), and screenshots if safe.
+
+## Additional debug parameters
+
+To save image bandwidth, call `screenshot(max_dimension=1600, quality=70)`.
+The metadata includes `region_global_origin` and `pixel_to_global_scale`.
+Convert image pixel `(x,y)` to physical desktop coordinates with
+`global_x = region_global_origin[0] + x * pixel_to_global_scale[0]` and likewise for y.
+
+To resolve a uniquely named UI control without manually picking a token, call
+`resolve_element(snapshot_id="sN", name="Save", role="button")` after observing.
+Do not guess IDs. Raw `act` can accept the same `snapshot_id` as a foreground guard;
+it invalidates the observation after execution.
