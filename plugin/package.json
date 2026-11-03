@@ -17,14 +17,14 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-mcp-client": "0.2.2-alpha.2",
-    "@deepseek-ai/schemastery": "0.2.2-alpha.2"
+    "@deepseek-ai/schemastery": "3.18.6-alpha.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/cordis": "^4.0.5",
     "@deepseek-ai/dsh-computer-use": "*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "0.2.2-alpha.2",
+    "@deepseek-ai/cordis": "4.0.6-alpha.1",
     "@deepseek-ai/dsh-computer-use": "0.2.2-alpha.2",
     "typescript": "^5.8.3"
   }
