@@ -84,11 +84,12 @@ def main() -> None:
         health = request(3, "tools/call", {"name": "health", "arguments": {}})
         text = health["content"][0]["text"]
         flags = json.loads(text)
-        assert flags == {
-            "ready": True,
-            "capture_enabled": False,
-            "input_enabled": False,
-        }, flags
+        assert flags["ready"] is True, flags
+        assert flags["capture_enabled"] is False, flags
+        assert flags["input_enabled"] is False, flags
+        assert flags["platform"] in {"windows", "linux", "macos"}, flags
+        assert flags["element_snapshot_ttl_seconds"] == 10, flags
+        assert flags["native_accessibility"] in {"windows_uia_experimental", "not_implemented"}, flags
 
         denied_input = request(
             4,
