@@ -66,3 +66,13 @@ Preflight is not a transaction and does **not** make an executing batch atomic: 
 - `screenshot` additionally accepts `quality` (40..95; default 78), `max_dimension` (512..4096); when downscaled, `pixel_to_global_scale=[sx,sy]` indicates how to translate the returned pixel coordinates, in addition to `region_global_origin`. Full-resolution screenshots have both scale values equal to 1.
 
 No per-app grant UI, browser CDP, automatic semantic task verification, Linux AT-SPI or signed Windows installer is implemented here.
+
+### `check_ui_condition` (Windows, experimental)
+
+Input: `{ "name": "Save", "role": "button", "expected_present": true }`.
+Read-only query of current foreground-window UIA controls. Returns `verdict` as
+`satisfied`, `unsatisfied`, or `inconclusive`, with a match count, scanned
+controls and truncation flag. `inconclusive` is used when the scan is truncated
+or yields no accessible controls; native provider coverage is never assumed
+complete. This is only a **local UI assertion**, not proof of broader user-task
+success. Requires capture permission.
