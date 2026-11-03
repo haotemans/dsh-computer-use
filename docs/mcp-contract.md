@@ -56,3 +56,13 @@ Mouse coordinates are **global** (unlike screenshot-region x/y). The step limit 
 Before any input is emitted, `act` validates the **entire** batch. Each click/move must be inside a currently attached monitor, using **global physical pixel coordinates** (including negative coordinates on secondary displays). Invalid buttons, unsupported keys, malformed hotkeys, text over 16,384 UTF-8 bytes, oversized scrolls, and batch lengths outside 1..32 reject the request without sending any input. Key-only/text-only batches do not require display enumeration. A hotkey contains 1..4 distinct modifiers followed by one non-modifier key.
 
 Preflight is not a transaction and does **not** make an executing batch atomic: OS input injection can still fail mid-batch, and the target window can change between validation and delivery. Do not retry a partially executed batch without observing the desktop state. Coordinate validation prevents off-display clicks, not clicks in the wrong application. Per-app consent, foreground window checks, and semantic postconditions remain future work.
+
+## Experimental Windows UIA extensions (V0.2)
+
+- `observe_ui` on Windows tries a **bounded foreground-window** UIA scan (120 actionable controls, six levels); fallback explicitly remains `windows_only`. Controls receive `element_token` labels of the form `esN:I` and are never native HWNDs. Tokens are valid only for the latest snapshot, expire after ten seconds and are invalidated after input.
+- `resolve_element`: `{ "snapshot_id": "sN", "name": "Save", "role": "button" }`. Returns a token only when one eligible control matches the **exact** name/role; ambiguous names fail rather than guessing.
+- `act_element`: `{ "snapshot_id": "sN", "element_token": "esN:0", "action": "click" }`. Supports `click` or `focus`; checks permissions, token freshness, foreground HWND, element runtime ID, process, accessible name, role and bounds. Password/sensitive controls rejected. Success indicates input delivery only; a new observation is required to verify task success.
+- `act` accepts optional `snapshot_id` for Windows foreground guarding. Low-level actions without `snapshot_id` remain permitted when input opt-in is enabled; callers should pass this guard whenever the intended target app matters.
+- `screenshot` additionally accepts `quality` (40..95; default 78), `max_dimension` (512..4096); when downscaled, `pixel_to_global_scale=[sx,sy]` indicates how to translate the returned pixel coordinates, in addition to `region_global_origin`. Full-resolution screenshots have both scale values equal to 1.
+
+No per-app grant UI, browser CDP, automatic semantic task verification, Linux AT-SPI or signed Windows installer is implemented here.
