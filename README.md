@@ -88,3 +88,9 @@ Further design: `docs/architecture.md`, `docs/deepseek-ui-contract.md`, `docs/mc
 `act` now performs **whole-batch preflight** before sending any input. Click/move coordinates must fall within a currently connected display in global physical pixels, including negative origins. The validator rejects invalid buttons, hotkeys, keys, text length, scroll amount and oversized batches, so an invalid late action does not execute earlier actions. Keyboard-only requests do not require a display lookup.
 
 This does **not** guarantee transactionality once execution starts: OS injection errors, application focus changes or UI transitions can still result in partial execution. It also does **not** enforce a foreground-window policy, app allowlist or per-application consent. Re-observe before retries; see `docs/mcp-contract.md`.
+
+## Windows UIA experimental V0.2
+
+The Windows backend now attempts a **bounded foreground-window UI Automation observation** in `observe_ui`. When successful, the response includes actual controls and snapshot-scoped `element_token` values. `act_element` supports guarded `click` and `focus`; each operation checks token age, foreground HWND, process, runtime identity and live bounds. Password fields are not actionable. On UIA failure, the server falls back to the explicit `windows_only` observation. Capture/input remain opt-in.
+
+See [Windows interactive debugging instructions](docs/windows-debugging.md). This is still an **experimental Windows implementation**, not a production-ready unattended automation system. There is no signed installer, per-app consent UI, CDP backend, automatic postcondition verification or Linux AT-SPI element backend yet. CI compilation and real-desktop integration are distinct checks; a successful compile alone does not prove real desktop operation.
