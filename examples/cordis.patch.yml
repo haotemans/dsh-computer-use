@@ -1,0 +1,15 @@
+# Example overlay for a DSH source checkout; replace the absolute paths.
+# Only ONE computer-use provider may be active; disable any official CUA provider.
+- insert:
+    - id: computer-use-registry
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: rust-native-cua
+      # Point to compiled TS plugin. When developing in the DSH source tree,
+      # the .ts path can be used instead, per the upstream tutorial.
+      name: '/ABSOLUTE/PATH/dsh-computer-use/plugin/dist/index.js'
+      config:
+        command: '/ABSOLUTE/PATH/dsh-computer-use/native-mcp/target/release/dsh-native-cua'
+        args: []
+        allowCapture: false
+        allowInput: false
+        toolCallTimeoutMs: 30000
