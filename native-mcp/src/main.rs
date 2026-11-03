@@ -88,6 +88,9 @@ struct ActionsArgs {
     /// Return a screenshot of the primary monitor after the action batch.
     #[serde(default)]
     screenshot_after: bool,
+    /// Optional Windows foreground guard: use an unexpired UIA snapshot ID.
+    /// Strongly recommended for keyboard input or cross-application workflows.
+    snapshot_id: Option<String>,
 }
 
 fn allow_capture() -> bool {
@@ -394,6 +397,23 @@ impl NativeCua {
             return tool_error("screenshot_after requires allowCapture=true");
         }
         let _guard = self.desktop_lock.lock().await;
+        #[cfg(windows)]
+        if let Some(ref requested) = args.snapshot_id {
+            let saved = self.last_observation.lock().await;
+            let Some(observation) = saved.as_ref() else {
+                return tool_error("STALE: no valid foreground observation; call observe_ui");
+            };
+            if &observation.snapshot_id != requested || observation.captured.elapsed() > Duration::from_secs(10) {
+                return tool_error("STALE: snapshot replaced or expired");
+            }
+            if let Err(error) = windows_uia::verify_foreground(observation.foreground) {
+                return tool_error(error);
+            }
+        }
+        #[cfg(not(windows))]
+        if args.snapshot_id.is_some() {
+            return tool_error("UNAVAILABLE: foreground snapshot guard requires Windows");
+        }
         let screenshot_after = args.screenshot_after;
         // Preflight the entire batch before constructing Enigo or delivering input.
         // Pointer actions must use current, global physical display coordinates.
@@ -403,6 +423,8 @@ impl NativeCua {
                 .map_err(|error| format!("preflight rejected batch: {error}"))?;
             run_actions(prepared)
         }).await;
+        #[cfg(windows)]
+        { *self.last_observation.lock().await = None; }
         match outcome {
             Ok(Ok(count)) => {
                 if screenshot_after {
