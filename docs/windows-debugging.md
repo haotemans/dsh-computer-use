@@ -101,3 +101,24 @@ To resolve a uniquely named UI control without manually picking a token, call
 `resolve_element(snapshot_id="sN", name="Save", role="button")` after observing.
 Do not guess IDs. Raw `act` can accept the same `snapshot_id` as a foreground guard;
 it invalidates the observation after execution.
+
+## Native UI condition checks
+
+After `act_element` or `act`, call `check_ui_condition` with an exact
+accessible name and role to inspect the current foreground window:
+
+```json
+{"name":"check_ui_condition","arguments":{"name":"Save","role":"button","expected_present":true}}
+```
+
+Read `verdict`, `matches`, `truncated` and the scope. `inconclusive`
+means the accessibility provider did not supply sufficient evidence. A
+satisfied control-presence check does not prove an application saved a file.
+
+## Windows executable from CI
+
+After a successful PR GitHub Actions run, open its **Artifacts** section and
+retrieve `dsh-native-cua-windows-debug`. It is an **unsigned debug binary**
+for developer testing only. Keep the TypeScript adapter installation and
+Cordis overlay configuration alongside the native binary. No signed installer
+or automatic app permission grant is included.
