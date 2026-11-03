@@ -26,6 +26,9 @@ The TS plugin is a tiny connection layer; it deliberately reuses DSH's existing 
 | `observe_ui` | DeepSeek-facing `UIv1` compact window inventory (or JSON); bounded snapshot IDs, explicit `windows_only` coverage and pixel coordinates |
 | `screenshot` | Entire monitor / monitor-local region, JPEG image and coordinate metadata |
 | `act` | Batch up to 32 mouse/keyboard actions with optional screenshot-after |
+| `resolve_element` | Windows UIA: uniquely resolve a real control by exact accessible name and role within a fresh snapshot |
+| `act_element` | Windows UIA: guarded click/focus on a fresh element token; revalidates foreground, identity and bounds |
+| `check_ui_condition` | Windows UIA: check control presence/absence and return satisfied, unsatisfied or inconclusive |
 
 Input actions: `move`, `click`, `text`, `key`, `hotkey`, `scroll`. All actions are ordered and fail fast; already delivered input is **not** rolled back. A successful delivery is not proof of the intended UI result.
 
