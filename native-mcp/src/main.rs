@@ -46,6 +46,16 @@ struct StoredObservation {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+struct ResolveElementArgs {
+    /// Current snapshot_id from observe_ui.
+    snapshot_id: String,
+    /// Exact accessible name, not substring or a model-generated guess.
+    name: String,
+    /// Optional role filter (button, textbox, checkbox, etc).
+    role: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ActElementArgs {
     /// Token from the most recent observe_ui response.
     element_token: String,
@@ -340,6 +350,43 @@ impl NativeCua {
             },
             Ok(Err(e)) => tool_error(e),
             Err(e) => tool_error(e.to_string()),
+        }
+    }
+
+    #[tool(description = "Windows only: resolve a unique actual accessible control by its exact name and optional role from the latest UIA snapshot. Returns its snapshot token; no input is sent. Requires capture permission")]
+    async fn resolve_element(&self, Parameters(args): Parameters<ResolveElementArgs>) -> CallToolResult {
+        if !allow_capture() { return tool_error("ACCESS_DENIED: capture permission required"); }
+        #[cfg(not(windows))]
+        { let _ = args; return tool_error("UNAVAILABLE: Windows UI Automation required"); }
+        #[cfg(windows)]
+        {
+            let _guard = self.desktop_lock.lock().await;
+            let saved = self.last_observation.lock().await;
+            let Some(observation) = saved.as_ref() else {
+                return tool_error("STALE: no current accessibility observation");
+            };
+            if observation.snapshot_id != args.snapshot_id ||
+                observation.captured.elapsed() > Duration::from_secs(10) {
+                return tool_error("STALE: snapshot replaced or expired");
+            }
+            if let Err(error) = windows_uia::verify_foreground(observation.foreground) {
+                return tool_error(error);
+            }
+            if args.name.is_empty() { return tool_error("INVALID_ARGUMENT: name must not be empty"); }
+            let hits: Vec<usize> = observation.targets.iter().enumerate()
+                .filter(|(_, t)| t.name == args.name &&
+                    args.role.as_ref().is_none_or(|role| t.role == *role) && !t.sensitive)
+                .map(|(i, _)| i).collect();
+            match hits.as_slice() {
+                [index] => CallToolResult::success(vec![ContentBlock::text(
+                    json!({"snapshot_id": observation.snapshot_id,
+                        "element_token": format!("e{}:{}", observation.snapshot_id, index),
+                        "role": observation.targets[*index].role,
+                        "name": observation.targets[*index].name}).to_string()
+                )]),
+                [] => tool_error("NOT_FOUND: no matching non-sensitive control in latest snapshot"),
+                _ => tool_error(format!("AMBIGUOUS: {} controls have that name/role; use the exact element_token from observe_ui", hits.len())),
+            }
         }
     }
 
