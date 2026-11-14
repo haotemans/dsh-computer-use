@@ -33,6 +33,12 @@ export const Config: z<Partial<Config>, Config> = z.object({
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = config.backend
+  if (backend === 'kimi' && config.command === 'dsh-native-cua') {
+    throw new Error('Kimi CU backend requires an explicit path to the installed kimi-cu executable')
+  }
+  if (backend === 'kimi' && (config.args.length !== 1 || config.args[0] !== 'mcp')) {
+    throw new Error("Kimi CU backend requires args: ['mcp'] for the verified stdio interface")
+  }
   // Kimi requires the actual Kimi CU executable, not the Kimi Code CLI.
   // Set command to the absolute path and args: ['mcp'] in the overlay.
   const serverName = backend === 'kimi' ? 'kimi_cu' : 'native_cua'
