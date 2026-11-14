@@ -3,7 +3,7 @@
 > 适用：Windows 10/11、PowerShell、交互式 Windows 桌面，DSH (DeepSeek Harness) + 本仓库的 V0.2 实验性 Rust MCP 插件。
 >
 > 仓库：https://github.com/haotemans/dsh-computer-use
-> 当前调试分支：feat/windows-uia-debug-round（PR #3）。
+> Windows UIA 的 PR #3 已合并至 `main`。默认从 `main` 安装；如需检查历史实现，可按提交 SHA 对照。
 >
 > **给执行 Agent 的指令：** 用户已委托你安装和接入插件。依次执行检查、安装/构建、生成独立配置、启动或告知重启方式、验证。不要仅输出命令就声称安装完成。遇到不可逆修改、管理员权限、账号认证或开启桌面输入授权时，必须取得用户明确同意。
 
@@ -45,7 +45,7 @@
 $ErrorActionPreference = 'Stop'
 $Root = Join-Path $env:LOCALAPPDATA 'DSH/computer-use'
 $Repo = 'https://github.com/haotemans/dsh-computer-use.git'
-$Branch = 'feat/windows-uia-debug-round'
+$Branch = 'main'
 $Overlay = Join-Path $Root 'cordis.agent.yml'
 $PluginJs = Join-Path $Root 'plugin/dist/index.js'
 $ServerExe = Join-Path $Root 'native-mcp/target/release/dsh-native-cua.exe'
@@ -82,7 +82,7 @@ Get-Command pnpm.cmd -ErrorAction SilentlyContinue | Select-Object Name, Source
 $ErrorActionPreference = 'Stop'
 $Root = Join-Path $env:LOCALAPPDATA 'DSH/computer-use'
 $Repo = 'https://github.com/haotemans/dsh-computer-use.git'
-$Branch = 'feat/windows-uia-debug-round'
+$Branch = 'main'
 
 if (-not (Test-Path $Root)) {
     git clone --single-branch --branch $Branch $Repo $Root
@@ -310,9 +310,11 @@ DSH Computer Use 安装结果
 
 ## 10. 官方依据与进一步调试
 
-- 本仓库调试文档：https://github.com/haotemans/dsh-computer-use/blob/feat/windows-uia-debug-round/docs/windows-debugging.md
+- 本仓库调试文档：https://github.com/haotemans/dsh-computer-use/blob/main/docs/windows-debugging.md
 - 本仓库配置示例：https://github.com/haotemans/dsh-computer-use/blob/feat/windows-uia-debug-round/examples/cordis.patch.yml
 - DSH 官方第一个插件指南：https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/user/develop/basic/index.md
 - DSH 官方运行方式：https://github.com/deepseek-ai/deepseek-harness/blob/main/README.md
+
+**新版兼容性提示：** 本仓库 TypeScript 适配器使用 DSH 0.2.2-rc.3 API，并通过 `@deepseek-ai/dsh-computer-use/types` 和 `@deepseek-ai/dsh-brand` 提供方标识接口。更新源码后必须在 `plugin/` 重新执行 `npm.cmd install`、`npm.cmd run build`，再使用 `--patch` 重启 DSH。检查日志是否出现 `ERR_PACKAGE_PATH_NOT_EXPORTED`、`module not found`、`computer use provider ... already registered`、`mcp-client(native_cua): initial connection or tool synchronization failed`。无法获得 `mcp__native_cua__health` 说明未通过工具发现阶段，不应归因于 capture/input 权限。CI 的 `cargo check`/构建通过不能证明实际 Windows 桌面操作可用。
 
 **最终验收标准：** 在真实 DSH 会话中成功加载 Cordis 插件、MCP 工具可发现、health 与默认权限检查通过；真实 Windows 桌面功能必须另行实测。若 Agent 环境没有终端或桌面控制能力，应提供已生成的配置和精确阻塞点，而不是声称已经安装。
