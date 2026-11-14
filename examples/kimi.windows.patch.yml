@@ -1,0 +1,21 @@
+# Replace BOTH absolute placeholders and verify official Kimi CU is installed.
+# Native Rust provider must not run concurrently with this provider.
+- insert:
+    - id: computer-use-registry
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: kimi-cu-provider
+      name: 'C:/ABSOLUTE/PATH/dsh-computer-use/plugin/dist/index.js'
+      config:
+        backend: kimi
+        command: 'C:/Users/USER/AppData/Local/KimiCU/kimi-cu.exe'
+        args: [mcp]
+        allowCapture: false
+        allowInput: false
+        toolCallTimeoutMs: 20000
+    # Optional skill discovery; omit if the same providerName already exists.
+    - id: kimi-cu-agent-skill
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: 'dsh-computer-use-kimi'
+        includeDefaultRoots: false
+        customSkillDirs: ['C:/ABSOLUTE/PATH/dsh-computer-use/skills']
