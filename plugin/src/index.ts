@@ -1,7 +1,9 @@
 /**
- * Cordis Computer Use MCP provider: native Rust or an installed Kimi CU runtime.
- * A single DSH MCP bridge owns discovery and tool projection. The guard is
- * monotonic and defaults to deny: a prompt cannot grant desktop permissions.
+ * Independent DSH Computer Use provider.
+ *
+ * One native Rust MCP server owns desktop observation and input. DSH owns the
+ * session, tool policies, MCP transport and image projection. No Kimi runtime
+ * or executable is used: Kimi's observe-act-verify pattern is design input only.
  */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -10,11 +12,10 @@ import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import { checkToolPolicy } from './policy.js'
 
-export const name = 'computer-use-mcp'
+export const name = 'computer-use-rust-mcp'
 export const inject = ['computerUse', 'tools']
 
 export interface Config {
-  backend: 'native' | 'kimi'
   command: string
   args: string[]
   allowCapture: boolean
@@ -23,7 +24,6 @@ export interface Config {
 }
 
 export const Config: z<Partial<Config>, Config> = z.object({
-  backend: z.union([z.const('native'), z.const('kimi')]).default('native'),
   command: z.string().pattern(/\S/).default('dsh-native-cua'),
   args: z.array(String).default([]),
   allowCapture: z.boolean().default(false),
@@ -32,45 +32,34 @@ export const Config: z<Partial<Config>, Config> = z.object({
 })
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = config.backend
-  if (backend === 'kimi' && config.command === 'dsh-native-cua') {
-    throw new Error('Kimi CU backend requires an explicit path to the installed kimi-cu executable')
-  }
-  if (backend === 'kimi' && (config.args.length !== 1 || config.args[0] !== 'mcp')) {
-    throw new Error("Kimi CU backend requires args: ['mcp'] for the verified stdio interface")
-  }
-  // Kimi requires the actual Kimi CU executable, not the Kimi Code CLI.
-  // Set command to the absolute path and args: ['mcp'] in the overlay.
-  const serverName = backend === 'kimi' ? 'kimi_cu' : 'native_cua'
   const childConfig = McpClient.Config({
     transport: 'stdio',
-    serverName,
+    serverName: 'native_cua',
     command: config.command,
     args: config.args,
-    env: backend === 'native'
-      ? {
-          CUA_ALLOW_CAPTURE: config.allowCapture ? '1' : '0',
-          CUA_ALLOW_INPUT: config.allowInput ? '1' : '0',
-        }
-      : {},
+    env: {
+      CUA_ALLOW_CAPTURE: config.allowCapture ? '1' : '0',
+      CUA_ALLOW_INPUT: config.allowInput ? '1' : '0',
+    },
     toolCallTimeoutMs: config.toolCallTimeoutMs,
     failOnStartupError: true,
   })
 
   let child!: Fiber
   ctx.effect(function* () {
-    // Only one desktop provider may be active in a Host.
+    // The current DSH service allows one Computer Use provider per Host.
     yield ctx.computerUse.register(
-      brandString<Branded<'ComputerUseProviderName'>>(`${serverName}-mcp`),
+      brandString<Branded<'ComputerUseProviderName'>>('native-cua-rust-mcp'),
     )
-    // All calls, including PTC nested calls, traverse the DSH tool pipeline.
-    // Install the guard before tool discovery, and fail closed on unknown tools.
+    // DSH's monotonic guard blocks denied tools even when an Agent asks
+    // another executor (including PTC) to call them. The Rust process also
+    // checks capture/input independently at the operation boundary.
     yield ctx.tools.guard((execution) =>
-      checkToolPolicy(execution.name, backend, config.allowCapture, config.allowInput),
+      checkToolPolicy(execution.name, config.allowCapture, config.allowInput),
     )
     child = ctx.plugin(McpClient, childConfig)
     yield child.dispose
-  }, 'computer-use-mcp.connection')
+  }, 'computer-use-rust-mcp.connection')
 
   await child.await()
 }

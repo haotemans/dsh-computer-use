@@ -263,6 +263,28 @@ impl NativeCua {
         }).to_string()
     }
 
+    #[tool(description = "Diagnose independent Rust Computer Use readiness and permissions without reading desktop content or sending input")]
+    fn doctor(&self) -> String {
+        let platform_supported = cfg!(windows);
+        let capture = allow_capture();
+        let input = allow_input();
+        json!({
+            "backend": "dsh-native-rust",
+            "platform": std::env::consts::OS,
+            "platform_supported": platform_supported,
+            "capture_enabled": capture,
+            "input_enabled": input,
+            "state": if !platform_supported { "partial" } else if capture && input { "ready" } else { "partial" },
+            "checks": [
+                {"id": "native_server", "status": "ok"},
+                {"id": "windows_accessibility", "status": if platform_supported { "available_unverified" } else { "unsupported" }},
+                {"id": "capture_permission", "status": if capture { "enabled" } else { "disabled" }},
+                {"id": "input_permission", "status": if input { "enabled" } else { "disabled" }}
+            ],
+            "note": "Configuration readiness only. Interactive desktop availability, MCP projection and UI operation success need separate live checks."
+        }).to_string()
+    }
+
     #[tool(description = "List attached displays with global origins for accurate coordinate mapping")]
     fn list_displays(&self) -> String {
         match Monitor::all() {
@@ -278,7 +300,7 @@ impl NativeCua {
         }
     }
 
-    #[tool(description = "Observe desktop UI for DeepSeek: bounded, compact window inventory with snapshot ID, physical bounds and explicit coverage limits. Currently WINDOWS ONLY; no accessibility controls or active-window detection yet. Use screenshot for visual detail. Requires capture permission")]
+    #[tool(description = "Observe desktop UI for DeepSeek: bounded, compact window inventory with snapshot ID, physical bounds and explicit coverage limits. On Windows attempts bounded foreground accessibility controls; falls back explicitly to windows_only. Requires capture permission")]
     async fn observe_ui(&self, Parameters(args): Parameters<ObserveUiArgs>) -> CallToolResult {
         if !allow_capture() { return tool_error("UI observation disabled. Set allowCapture=true in the TS provider configuration."); }
         let limit = args.max_windows.unwrap_or(30);
@@ -369,6 +391,11 @@ impl NativeCua {
             Ok(Err(e)) => tool_error(e),
             Err(e) => tool_error(e.to_string()),
         }
+    }
+
+    #[tool(description = "Get fresh native application/window state for Agent observe-act-verify. Returns the bounded UIv1 snapshot with Windows foreground UIA controls when available; no screenshot is taken. Requires capture permission")]
+    async fn get_app_state(&self, Parameters(args): Parameters<ObserveUiArgs>) -> CallToolResult {
+        self.observe_ui(Parameters(args)).await
     }
 
     #[tool(description = "Windows only: re-observe a named accessible control after an action. Reports satisfied, unsatisfied or inconclusive according to current foreground UIA coverage. Read-only and not proof of broader task success")]

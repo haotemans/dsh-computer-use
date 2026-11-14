@@ -1,47 +1,38 @@
 /**
- * Fail-closed DSH tool admission. This controls the MODEL-facing tool route,
- * including calls from the PTC executor. It is not a sandbox or a replacement
- * for DSH's user approval policy or the operating system's access controls.
+ * Computer Use permission boundary inside DSH's model tool pipeline.
+ * Native Rust rechecks environment permissions so bypassing the model-facing
+ * guard cannot accidentally enable direct desktop input.
+ *
+ * Scope: only mcp__native_cua__*; other applications/tools are unaffected.
+ * Not a substitute for per-task DSH approvals, user consent, or OS isolation.
  */
-export type ComputerBackend = 'native' | 'kimi'
 
-const READ_TOOLS: Record<ComputerBackend, ReadonlySet<string>> = {
-  native: new Set([
-    'list_displays', 'list_windows', 'observe_ui', 'screenshot',
-    'resolve_element', 'check_ui_condition',
-  ]),
-  kimi: new Set([
-    'list_apps', 'get_app_state', 'screenshot', 'list_windows',
-    'get_window_state', 'get_app_list',
-  ]),
-}
+const PREFIX = 'mcp__native_cua__'
 
-const WRITE_TOOLS: Record<ComputerBackend, ReadonlySet<string>> = {
-  native: new Set(['act', 'act_element']),
-  kimi: new Set([
-    'click', 'type_text', 'press_key', 'scroll', 'set_value',
-    'perform_secondary_action', 'select_text', 'drag', 'open_app',
-    'activate_app', 'focus', 'hotkey', 'move', 'mouse_click',
-  ]),
-}
+const READ_TOOLS = new Set([
+  'list_displays', 'list_windows', 'observe_ui', 'get_app_state',
+  'screenshot', 'resolve_element', 'check_ui_condition',
+])
+
+const WRITE_TOOLS = new Set(['act', 'act_element'])
 
 export function checkToolPolicy(
   qualifiedName: string,
-  backend: ComputerBackend,
   allowCapture: boolean,
   allowInput: boolean,
 ): string | undefined {
-  const namespace = backend === 'kimi' ? 'mcp__kimi_cu__' : 'mcp__native_cua__'
-  if (!qualifiedName.startsWith(namespace)) return undefined
-
-  const tool = qualifiedName.slice(namespace.length)
+  if (!qualifiedName.startsWith(PREFIX)) return undefined
+  const tool = qualifiedName.slice(PREFIX.length)
   if (tool === 'health' || tool === 'doctor') return undefined
-  if (READ_TOOLS[backend].has(tool)) {
-    return allowCapture ? undefined : `Computer Use capture is disabled (tool: ${tool}). Enable allowCapture explicitly.`
+
+  if (READ_TOOLS.has(tool)) {
+    return allowCapture ? undefined
+      : `Computer Use capture is disabled (tool: ${tool}). Enable allowCapture explicitly.`
   }
-  if (WRITE_TOOLS[backend].has(tool)) {
-    if (!allowCapture) return 'Computer Use cannot act without capture permission and fresh state verification.'
-    return allowInput ? undefined : `Computer Use input is disabled (tool: ${tool}). Enable allowInput explicitly.`
+  if (WRITE_TOOLS.has(tool)) {
+    if (!allowCapture) return 'Computer Use input requires capture permission to verify desktop state.'
+    return allowInput ? undefined
+      : `Computer Use input is disabled (tool: ${tool}). Enable allowInput explicitly.`
   }
-  return `Computer Use tool "${tool}" is not on the ${backend} allowlist. Refusing unknown desktop capability.`
+  return `Unknown Computer Use tool "${tool}" was refused by the desktop allowlist.`
 }

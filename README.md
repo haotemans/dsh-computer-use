@@ -101,16 +101,21 @@ See [Windows interactive debugging instructions](docs/windows-debugging.md). Thi
 
 ## DSH 0.2.2-rc.3 compatibility and missing-tool diagnostics
 
-The TypeScript adapter uses the supported `@deepseek-ai/dsh-computer-use/types` import and `@deepseek-ai/dsh-brand` for provider-name construction. The removed `@deepseek-ai/dsh-computer-use/brand` subpath must not be imported with newer DSH builds. Rebuild `plugin/dist` after upgrading dependencies. The checked-in dependency versions target DSH 0.2.2-rc.3; older installations need explicit compatibility review rather than mixing package generations.
+The TypeScript adapter uses `@deepseek-ai/dsh-brand` for provider-name construction without relying on removed or unpublished `@deepseek-ai/dsh-computer-use/brand` or `/types` import paths. The removed `@deepseek-ai/dsh-computer-use/brand` subpath must not be imported with newer DSH builds. Rebuild `plugin/dist` after upgrading dependencies. The checked-in dependency versions target DSH 0.2.2-rc.3; older installations need explicit compatibility review rather than mixing package generations.
 
 If an Agent reports **Browser access is unavailable** or **Computer Use MCP is unavailable**, do not interpret the text alone as a Rust execution failure. Verify, in order: (1) DSH actually started with `--patch`, (2) only one Computer Use provider is registered, (3) the executable path and permissions are correct, (4) `mcp__native_cua__health` appears in the current Agent tool list, (5) the health permissions and model image route support the requested operation. Browser search does not prove browser control. Review DSH startup errors for `ERR_PACKAGE_PATH_NOT_EXPORTED`, `module not found`, `mcp-client(native_cua)`, and provider conflicts.
 
 The Rust MCP operates on the **desktop of the machine running DSH**. Cloud deployments do not automatically control a remote user's local browser. A desktop session and separately authorized remote-control bridge would be required. CI smoke tests verify MCP negotiation but not GUI interaction.
 
-## Optional Kimi Computer Use backend for DSH
+## Independent native Computer Use (Kimi-inspired interaction design)
 
-The TypeScript adapter now supports `backend: kimi` with an external official Kimi CU executable speaking stdio MCP (`kimi-cu mcp`). The default `backend: native` remains unchanged. **This is a backend switch, not automatic integration with Kimi Code or its model API.**
+This repository implements its **own Rust desktop engine**. It does not install, invoke, wrap, or depend on Kimi CU. Kimi's observe/act/verify interaction and staged readiness diagnostics inform the design only.
 
-Use the [Kimi adapter guide](docs/kimi-dsh-adapter.md), [Windows patch example](examples/kimi.windows.patch.yml), [macOS patch example](examples/kimi.macos.patch.yml), and [bundled DSH skill](skills/dsh-kimi-computer-use/SKILL.md). The adapter enforces explicit screen/input opt-in at the DSH tools guard, denies unknown Computer Use tools, and uses the existing DSH MCP client directly without an extra proxy process. If a new Kimi version advertises different tools, review the allowlist and update the tests before using them.
+- `mcp__native_cua__doctor`: reports configuration readiness and platform/permission checks without reading private desktop content. It cannot guarantee the host has an active desktop.
+- `mcp__native_cua__get_app_state`: obtains a fresh native UIv1 snapshot using the existing bounded Windows UI Automation observer and explicit fallback when UIA is unavailable. It is a native alias of `observe_ui`, not an external backend.
+- `mcp__native_cua__act_element`: existing short-lived snapshot token and foreground validation, with denial of sensitive fields.
+- DSH tool guard: model-initiated native observation and input require separate permissions, with unknown native CUA tool names denied by default; native server independently checks permissions.
 
-Build `plugin/` with `npm run check`. CI checks the policy in Node and performs separate Windows Rust compile/MCP smoke tests. These checks do **not** constitute real Windows desktop automation verification. For irreversible actions the Host's user-approval policy is still required; the adapter cannot infer the meaning of an arbitrary click.
+Use the [native Agent workflow skill](skills/dsh-native-computer-use/SKILL.md). It prefers semantic UI elements, takes one action at a time when uncertain, verifies state after each transition, and requests user approval for impactful actions.
+
+Real improvements still to implement: native `set_value`/drag UI actions, application-specific consent, cross-session ownership leases, automatic postcondition evaluation and real Windows GUI benchmarks. The CI smoke test verifies MCP protocol readiness and denial gates, not full desktop autonomy.

@@ -78,7 +78,7 @@ def main() -> None:
 
         catalog = request(2, "tools/list", {})
         names = {entry["name"] for entry in catalog["tools"]}
-        expected = {"health", "list_displays", "list_windows", "observe_ui", "screenshot", "act", "act_element", "resolve_element", "check_ui_condition"}
+        expected = {"health", "doctor", "list_displays", "list_windows", "observe_ui", "get_app_state", "screenshot", "act", "act_element", "resolve_element", "check_ui_condition"}
         assert names == expected, f"tool list differs: {names}"
 
         health = request(3, "tools/call", {"name": "health", "arguments": {}})
@@ -90,6 +90,19 @@ def main() -> None:
         assert flags["platform"] in {"windows", "linux", "macos"}, flags
         assert flags["element_snapshot_ttl_seconds"] == 10, flags
         assert flags["native_accessibility"] in {"windows_uia_experimental", "not_implemented"}, flags
+
+        doctor = request(9, "tools/call", {"name": "doctor", "arguments": {}})
+        diagnostics = json.loads(doctor["content"][0]["text"])
+        assert diagnostics["backend"] == "dsh-native-rust", diagnostics
+        assert diagnostics["capture_enabled"] is False, diagnostics
+        assert diagnostics["input_enabled"] is False, diagnostics
+        assert diagnostics["state"] == "partial", diagnostics
+
+        denied_app_state = request(
+            10, "tools/call", {"name": "get_app_state", "arguments": {"format": "compact"}}
+        )
+        assert denied_app_state.get("isError") is True, denied_app_state
+        assert "disabled" in denied_app_state["content"][0]["text"].lower(), denied_app_state
 
         denied_input = request(
             4,
