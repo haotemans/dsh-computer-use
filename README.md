@@ -106,3 +106,11 @@ The TypeScript adapter uses the supported `@deepseek-ai/dsh-computer-use/types` 
 If an Agent reports **Browser access is unavailable** or **Computer Use MCP is unavailable**, do not interpret the text alone as a Rust execution failure. Verify, in order: (1) DSH actually started with `--patch`, (2) only one Computer Use provider is registered, (3) the executable path and permissions are correct, (4) `mcp__native_cua__health` appears in the current Agent tool list, (5) the health permissions and model image route support the requested operation. Browser search does not prove browser control. Review DSH startup errors for `ERR_PACKAGE_PATH_NOT_EXPORTED`, `module not found`, `mcp-client(native_cua)`, and provider conflicts.
 
 The Rust MCP operates on the **desktop of the machine running DSH**. Cloud deployments do not automatically control a remote user's local browser. A desktop session and separately authorized remote-control bridge would be required. CI smoke tests verify MCP negotiation but not GUI interaction.
+
+## Optional Kimi Computer Use backend for DSH
+
+The TypeScript adapter now supports `backend: kimi` with an external official Kimi CU executable speaking stdio MCP (`kimi-cu mcp`). The default `backend: native` remains unchanged. **This is a backend switch, not automatic integration with Kimi Code or its model API.**
+
+Use the [Kimi adapter guide](docs/kimi-dsh-adapter.md), [Windows patch example](examples/kimi.windows.patch.yml), [macOS patch example](examples/kimi.macos.patch.yml), and [bundled DSH skill](skills/dsh-kimi-computer-use/SKILL.md). The adapter enforces explicit screen/input opt-in at the DSH tools guard, denies unknown Computer Use tools, and uses the existing DSH MCP client directly without an extra proxy process. If a new Kimi version advertises different tools, review the allowlist and update the tests before using them.
+
+Build `plugin/` with `npm run check`. CI checks the policy in Node and performs separate Windows Rust compile/MCP smoke tests. These checks do **not** constitute real Windows desktop automation verification. For irreversible actions the Host's user-approval policy is still required; the adapter cannot infer the meaning of an arbitrary click.
