@@ -1,6 +1,6 @@
 # DeepSeek Harness Computer Use: TypeScript adapter + Rust MCP
 
-> Status: **V0.1 development scaffold**. Not production-ready. The new Windows UIA version has not been integration-tested on an interactive desktop in the authoring environment (no local Rust toolchain or GUI). GitHub Actions verifies compilation and smoke tests. No official release or signed installer is included; successful CI runs upload an unsigned Windows debug executable artifact.
+> Status: **V0.2 experimental development scaffold**. Not production-ready. The new Windows UIA version has not been integration-tested on an interactive desktop in the authoring environment (no local Rust toolchain or GUI). GitHub Actions verifies compilation and smoke tests. No official release or signed installer is included; successful CI runs upload an unsigned Windows debug executable artifact.
 
 ## Architecture and separation of concerns
 
@@ -97,3 +97,12 @@ This does **not** guarantee transactionality once execution starts: OS injection
 The Windows backend now attempts a **bounded foreground-window UI Automation observation** in `observe_ui`. When successful, the response includes actual controls and snapshot-scoped `element_token` values. `act_element` supports guarded `click` and `focus`; each operation checks token age, foreground HWND, process, runtime identity and live bounds. Password fields are not actionable. On UIA failure, the server falls back to the explicit `windows_only` observation. Capture/input remain opt-in.
 
 See [Windows interactive debugging instructions](docs/windows-debugging.md). This is still an **experimental Windows implementation**, not a production-ready unattended automation system. There is no signed installer, per-app consent UI, CDP backend, automatic postcondition verification or Linux AT-SPI element backend yet. CI compilation and real-desktop integration are distinct checks; a successful compile alone does not prove real desktop operation.
+
+
+## DSH 0.2.2-rc.3 compatibility and missing-tool diagnostics
+
+The TypeScript adapter uses the supported `@deepseek-ai/dsh-computer-use/types` import and `@deepseek-ai/dsh-brand` for provider-name construction. The removed `@deepseek-ai/dsh-computer-use/brand` subpath must not be imported with newer DSH builds. Rebuild `plugin/dist` after upgrading dependencies. The checked-in dependency versions target DSH 0.2.2-rc.3; older installations need explicit compatibility review rather than mixing package generations.
+
+If an Agent reports **Browser access is unavailable** or **Computer Use MCP is unavailable**, do not interpret the text alone as a Rust execution failure. Verify, in order: (1) DSH actually started with `--patch`, (2) only one Computer Use provider is registered, (3) the executable path and permissions are correct, (4) `mcp__native_cua__health` appears in the current Agent tool list, (5) the health permissions and model image route support the requested operation. Browser search does not prove browser control. Review DSH startup errors for `ERR_PACKAGE_PATH_NOT_EXPORTED`, `module not found`, `mcp-client(native_cua)`, and provider conflicts.
+
+The Rust MCP operates on the **desktop of the machine running DSH**. Cloud deployments do not automatically control a remote user's local browser. A desktop session and separately authorized remote-control bridge would be required. CI smoke tests verify MCP negotiation but not GUI interaction.
